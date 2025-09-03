@@ -646,8 +646,8 @@ def sync_tables(conn_info, logical_streams, state, end_lsn, state_file):
                 raise
 
             if msg:
-                if (break_at_end_lsn) and (msg.data_start > end_lsn):
-                    LOGGER.info('Breaking - latest wal message %s is past end_lsn %s',
+                if (break_at_end_lsn) and (msg.data_start >= end_lsn):
+                    LOGGER.info('Breaking - reached latest wal message, %s is gt or eq end_lsn %s',
                                 int_to_lsn(msg.data_start),
                                 int_to_lsn(end_lsn))
                     break
