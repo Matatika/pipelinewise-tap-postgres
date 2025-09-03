@@ -1196,9 +1196,41 @@ class TestLogicalReplication(unittest.TestCase):
         mocked_connect.return_value.cursor.return_value.read_message.return_value = test_message()
 
         mocked_locate_rep_slot.return_value = 'mocked_value_for_replication_slot'
-        expected_log_message = 'INFO:tap_postgres:Breaking - latest wal message ' \
+        expected_log_message = 'INFO:tap_postgres:Breaking - reached latest wal message ' \
                                f'{logical_replication.int_to_lsn(msg_data_start)} is' \
-                               f' past end_lsn {logical_replication.int_to_lsn(end_lsn)}'
+                               f' gt or eq end_lsn {logical_replication.int_to_lsn(end_lsn)}'
+        with self.assertLogs() as captured_log:
+            actual_output = logical_replication.sync_tables(self.conn_info, self.logical_streams, state, end_lsn,
+                                                            state_file)
+            self.assertIn(expected_log_message, captured_log.output)
+            self.assertEqual(state, actual_output)
+
+    @patch('tap_postgres.sync_strategies.logical_replication.locate_replication_slot')
+    @patch('tap_postgres.sync_strategies.logical_replication.get_pg_version')
+    @patch("psycopg2.connect")
+    def test_sync_tables_if_break_at_end_lsn_and_msg_data_start_greater_than_end_lsn(self,
+                                                                                     mocked_connect,
+                                                                                     mocked_version,
+                                                                                     mocked_locate_rep_slot):
+        """Test sync_table if there is break_at_the_end_lsn and message data_start eq to end lsn"""
+        end_lsn = 4
+        msg_data_start = end_lsn
+
+        class test_message:
+            data_start = msg_data_start
+
+        state = {'bookmarks': {'foo-bar': {'foo': 'bar', 'version': 'foo', 'lsn': 15}}}
+        self.conn_info['break_at_end_lsn'] = True
+        state_file = 5
+
+        mocked_version.return_value = 150000
+
+        mocked_connect.return_value.cursor.return_value.read_message.return_value = test_message()
+
+        mocked_locate_rep_slot.return_value = 'mocked_value_for_replication_slot'
+        expected_log_message = 'INFO:tap_postgres:Breaking - reached latest wal message, ' \
+                               f'{logical_replication.int_to_lsn(msg_data_start)} is' \
+                               f' gt or eq end_lsn {logical_replication.int_to_lsn(end_lsn)}'
         with self.assertLogs() as captured_log:
             actual_output = logical_replication.sync_tables(self.conn_info, self.logical_streams, state, end_lsn,
                                                             state_file)
